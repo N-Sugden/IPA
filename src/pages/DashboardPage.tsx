@@ -1,28 +1,76 @@
 import React, { useEffect, useState } from 'react'
-import { Room, UserRole } from '../types'
+import { Room, ObjectType, RoomObject, UserRole } from '../types'
 import RoleBadge from '../components/RoleBadge'
-import { createRoom, deleteRoom, getRooms, updateRoom } from '../services/rooms'
+import CrudModal from '../components/CrudModal'
+import {
+  createRoom,
+  deleteRoom,
+  getRooms,
+  updateRoom,
+} from '../services/rooms'
+import {
+  createObjectType,
+  deleteObjectType,
+  getObjectTypes,
+  updateObjectType,
+} from '../services/objectTypes'
+import {
+  createRoomObject,
+  deleteRoomObject,
+  getRoomObjects,
+  updateRoomObject,
+} from '../services/roomObjects'
 
 interface DashboardPageProps {
   role: UserRole
   onLogout: () => void
 }
 
+type OpenModal = 'rooms' | 'objectTypes' | 'roomObjects' | null
+
 const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
   const [rooms, setRooms] = useState<Room[]>([])
   const [selectedRoomId, setSelectedRoomId] = useState<string>('')
   const [loadingRooms, setLoadingRooms] = useState(true)
   const [roomError, setRoomError] = useState<string | null>(null)
-  const [showRoomModal, setShowRoomModal] = useState(false)
-  const [popupRoomId, setPopupRoomId] = useState<string>('')
-  const [roomName, setRoomName] = useState('')
-  const [roomWidth, setRoomWidth] = useState('')
-  const [roomLength, setRoomLength] = useState('')
-  const [actionMessage, setActionMessage] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+
+  const [objectTypes, setObjectTypes] = useState<ObjectType[]>([])
+  const [loadingObjectTypes, setLoadingObjectTypes] = useState(true)
+  const [objectTypeError, setObjectTypeError] = useState<string | null>(null)
+
+  const [roomObjects, setRoomObjects] = useState<RoomObject[]>([])
+  const [loadingRoomObjects, setLoadingRoomObjects] = useState(true)
+  const [roomObjectError, setRoomObjectError] = useState<string | null>(null)
+  const [allRoomObjects, setAllRoomObjects] = useState<RoomObject[]>([])
+
+  const [openModal, setOpenModal] = useState<OpenModal>(null)
+
+  const [roomModalId, setRoomModalId] = useState<string>('')
+  const [roomModalName, setRoomModalName] = useState('')
+  const [roomModalWidth, setRoomModalWidth] = useState('')
+  const [roomModalLength, setRoomModalLength] = useState('')
+  const [roomModalMessage, setRoomModalMessage] = useState<string | null>(null)
+  const [roomModalError, setRoomModalError] = useState<string | null>(null)
+
+  const [objectTypeModalId, setObjectTypeModalId] = useState<string>('')
+  const [objectTypeModalName, setObjectTypeModalName] = useState('')
+  const [objectTypeModalMessage, setObjectTypeModalMessage] = useState<string | null>(null)
+  const [objectTypeModalError, setObjectTypeModalError] = useState<string | null>(null)
+
+  const [objectModalId, setObjectModalId] = useState<string>('')
+  const [objectModalName, setObjectModalName] = useState('')
+  const [objectModalTypeId, setObjectModalTypeId] = useState('')
+  const [objectModalRoomId, setObjectModalRoomId] = useState('')
+  const [objectModalWidth, setObjectModalWidth] = useState('')
+  const [objectModalLength, setObjectModalLength] = useState('')
+  const [objectModalPositionX, setObjectModalPositionX] = useState('')
+  const [objectModalPositionY, setObjectModalPositionY] = useState('')
+  const [objectModalMessage, setObjectModalMessage] = useState<string | null>(null)
+  const [objectModalError, setObjectModalError] = useState<string | null>(null)
+
   const [saving, setSaving] = useState(false)
 
-  const refreshRooms = async () => {
+  const refreshRooms = async (): Promise<Room[]> => {
     setLoadingRooms(true)
     setRoomError(null)
 
@@ -39,58 +87,237 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
     }
   }
 
-  useEffect(() => {
-    const loadRooms = async () => {
-      const sortedRooms = await refreshRooms()
-      if (sortedRooms.length > 0) {
-        setSelectedRoomId(sortedRooms[0].id)
-        setPopupRoomId(sortedRooms[0].id)
-        setRoomName(sortedRooms[0].name)
-        setRoomWidth(String(sortedRooms[0].width))
-        setRoomLength(String(sortedRooms[0].length))
-      }
+  const refreshObjectTypes = async (): Promise<ObjectType[]> => {
+    setLoadingObjectTypes(true)
+    setObjectTypeError(null)
+
+    try {
+      const data = await getObjectTypes()
+      const sortedTypes = [...data].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+      setObjectTypes(sortedTypes)
+      return sortedTypes
+    } catch (error) {
+      setObjectTypeError(error instanceof Error ? error.message : String(error))
+      return []
+    } finally {
+      setLoadingObjectTypes(false)
+    }
+  }
+
+  const refreshRoomObjectsForRoom = async (roomId: string): Promise<RoomObject[]> => {
+    setLoadingRoomObjects(true)
+    setRoomObjectError(null)
+
+    try {
+      const data = await getRoomObjects(roomId)
+      setRoomObjects(data)
+      return data
+    } catch (error) {
+      setRoomObjectError(error instanceof Error ? error.message : String(error))
+      setRoomObjects([])
+      return []
+    } finally {
+      setLoadingRoomObjects(false)
+    }
+  }
+
+  const refreshAllRoomObjects = async (roomList: Room[]): Promise<RoomObject[]> => {
+    if (roomList.length === 0) {
+      setAllRoomObjects([])
+      return []
     }
 
-    loadRooms()
+    const fetches = await Promise.all(roomList.map(room => getRoomObjects(room.id).catch(() => [])))
+    const combined = fetches.flat()
+    setAllRoomObjects(combined)
+    return combined
+  }
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      const sortedRooms = await refreshRooms()
+      const sortedTypes = await refreshObjectTypes()
+
+      if (sortedRooms.length > 0) {
+        setSelectedRoomId(sortedRooms[0].id)
+        setObjectModalRoomId(sortedRooms[0].id)
+        await refreshRoomObjectsForRoom(sortedRooms[0].id)
+      }
+
+      if (sortedTypes.length > 0) {
+        setObjectModalTypeId(sortedTypes[0].id)
+      }
+
+      await refreshAllRoomObjects(sortedRooms)
+    }
+
+    loadInitialData()
   }, [])
+
+  useEffect(() => {
+    if (openModal === 'roomObjects' && objectModalRoomId) {
+      refreshRoomObjectsForRoom(objectModalRoomId)
+    }
+  }, [openModal, objectModalRoomId])
 
   const handleRoomSelect = (roomId: string) => {
     setSelectedRoomId(roomId)
   }
 
-  const handlePopupRoomSelect = (roomId: string) => {
-    const room = rooms.find(item => item.id === roomId)
-    if (!room) return
+  const openRoomModal = () => {
+    setRoomModalMessage(null)
+    setRoomModalError(null)
 
-    setPopupRoomId(roomId)
-    setRoomName(room.name)
-    setRoomWidth(String(room.width))
-    setRoomLength(String(room.length))
+    if (rooms.length > 0) {
+      const room = rooms.find(item => item.id === selectedRoomId) ?? rooms[0]
+      setRoomModalId(room.id)
+      setRoomModalName(room.name)
+      setRoomModalWidth(String(room.width))
+      setRoomModalLength(String(room.length))
+    } else {
+      setRoomModalId('')
+      setRoomModalName('')
+      setRoomModalWidth('')
+      setRoomModalLength('')
+    }
+
+    setOpenModal('rooms')
   }
 
-  const resetActionStates = () => {
-    setActionMessage(null)
-    setActionError(null)
+  const openObjectTypeModal = () => {
+    setObjectTypeModalMessage(null)
+    setObjectTypeModalError(null)
+
+    if (objectTypes.length > 0) {
+      const type = objectTypes[0]
+      setObjectTypeModalId(type.id)
+      setObjectTypeModalName(type.name)
+    } else {
+      setObjectTypeModalId('')
+      setObjectTypeModalName('')
+    }
+
+    setOpenModal('objectTypes')
+  }
+
+  const openRoomObjectModal = () => {
+    setObjectModalMessage(null)
+    setObjectModalError(null)
+
+    const roomId = selectedRoomId || rooms[0]?.id || ''
+    setObjectModalRoomId(roomId)
+    if (!objectModalTypeId && objectTypes.length > 0) {
+      setObjectModalTypeId(objectTypes[0].id)
+    }
+
+    if (rooms.length > 0 && !roomId) {
+      setObjectModalRoomId(rooms[0].id)
+    }
+
+    setObjectModalId('')
+    setObjectModalName('')
+    setObjectModalWidth('')
+    setObjectModalLength('')
+    setObjectModalPositionX('')
+    setObjectModalPositionY('')
+
+    setOpenModal('roomObjects')
+  }
+
+  const resetRoomModalState = () => {
+    setRoomModalMessage(null)
+    setRoomModalError(null)
+  }
+
+  const resetObjectTypeModalState = () => {
+    setObjectTypeModalMessage(null)
+    setObjectTypeModalError(null)
+  }
+
+  const resetRoomObjectModalState = () => {
+    setObjectModalMessage(null)
+    setObjectModalError(null)
   }
 
   const validateRoomFields = () => {
-    if (!roomName.trim()) {
+    if (!roomModalName.trim()) {
       return 'Raumname ist erforderlich.'
     }
-    if (!roomWidth.trim() || Number.isNaN(Number(roomWidth)) || Number(roomWidth) <= 0) {
+    if (!roomModalWidth.trim() || Number.isNaN(Number(roomModalWidth)) || Number(roomModalWidth) <= 0) {
       return 'Raumbreite muss eine positive Zahl sein.'
     }
-    if (!roomLength.trim() || Number.isNaN(Number(roomLength)) || Number(roomLength) <= 0) {
+    if (!roomModalLength.trim() || Number.isNaN(Number(roomModalLength)) || Number(roomModalLength) <= 0) {
       return 'Raumlänge muss eine positive Zahl sein.'
     }
     return null
   }
 
+  const validateObjectTypeFields = () => {
+    if (!objectTypeModalName.trim()) {
+      return 'Name des Möbeltyps ist erforderlich.'
+    }
+    return null
+  }
+
+  const validateRoomObjectFields = () => {
+    if (!objectModalName.trim()) {
+      return 'Name des Möbels ist erforderlich.'
+    }
+    if (!objectModalTypeId) {
+      return 'Bitte wählen Sie einen Möbeltyp.'
+    }
+    if (!objectModalRoomId) {
+      return 'Bitte wählen Sie einen Raum.'
+    }
+    if (!objectModalWidth.trim() || Number.isNaN(Number(objectModalWidth)) || Number(objectModalWidth) <= 0) {
+      return 'Objektbreite muss eine positive Zahl sein.'
+    }
+    if (!objectModalLength.trim() || Number.isNaN(Number(objectModalLength)) || Number(objectModalLength) <= 0) {
+      return 'Objektlänge muss eine positive Zahl sein.'
+    }
+    if (!objectModalPositionX.trim() || Number.isNaN(Number(objectModalPositionX)) || Number(objectModalPositionX) < 0) {
+      return 'Position X muss eine Zahl >= 0 sein.'
+    }
+    if (!objectModalPositionY.trim() || Number.isNaN(Number(objectModalPositionY)) || Number(objectModalPositionY) < 0) {
+      return 'Position Y muss eine Zahl >= 0 sein.'
+    }
+    return null
+  }
+
+  const handleRoomSelectInModal = (roomId: string) => {
+    const room = rooms.find(item => item.id === roomId)
+    if (!room) return
+    setRoomModalId(room.id)
+    setRoomModalName(room.name)
+    setRoomModalWidth(String(room.width))
+    setRoomModalLength(String(room.length))
+  }
+
+  const handleObjectTypeSelectInModal = (typeId: string) => {
+    const type = objectTypes.find(item => item.id === typeId)
+    if (!type) return
+    setObjectTypeModalId(type.id)
+    setObjectTypeModalName(type.name)
+  }
+
+  const handleRoomObjectSelectInModal = (objectId: string) => {
+    const object = roomObjects.find(item => item.id === objectId)
+    if (!object) return
+    setObjectModalId(object.id)
+    setObjectModalName(object.name ?? '')
+    setObjectModalTypeId(object.objectTypeId)
+    setObjectModalRoomId(object.roomId)
+    setObjectModalWidth(String(object.width))
+    setObjectModalLength(String(object.length))
+    setObjectModalPositionX(String(object.positionX))
+    setObjectModalPositionY(String(object.positionY))
+  }
+
   const handleCreateRoom = async () => {
-    resetActionStates()
+    resetRoomModalState()
     const validationError = validateRoomFields()
     if (validationError) {
-      setActionError(validationError)
+      setRoomModalError(validationError)
       return
     }
 
@@ -98,100 +325,330 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
 
     try {
       const createdRoom = await createRoom({
-        name: roomName.trim(),
-        width: Number(roomWidth),
-        length: Number(roomLength),
+        name: roomModalName.trim(),
+        width: Number(roomModalWidth),
+        length: Number(roomModalLength),
       })
 
       const sortedRooms = await refreshRooms()
       setSelectedRoomId(createdRoom.id)
-      setPopupRoomId(createdRoom.id)
-      setActionMessage('Raum wurde erstellt.')
+      setRoomModalId(createdRoom.id)
+      setRoomModalMessage('Raum wurde erstellt.')
       const created = sortedRooms.find(room => room.id === createdRoom.id)
       if (created) {
-        setRoomName(created.name)
-        setRoomWidth(String(created.width))
-        setRoomLength(String(created.length))
+        setRoomModalName(created.name)
+        setRoomModalWidth(String(created.width))
+        setRoomModalLength(String(created.length))
       }
+      await refreshAllRoomObjects(sortedRooms)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
+      setRoomModalError(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
   }
 
   const handleUpdateRoom = async () => {
-    resetActionStates()
-    if (!popupRoomId) {
-      setActionError('Bitte wählen Sie einen Raum aus der Liste.')
+    resetRoomModalState()
+    if (!roomModalId) {
+      setRoomModalError('Bitte wählen Sie einen Raum aus der Liste.')
       return
     }
 
     const validationError = validateRoomFields()
     if (validationError) {
-      setActionError(validationError)
+      setRoomModalError(validationError)
       return
     }
 
     setSaving(true)
 
     try {
-      const updatedRoom = await updateRoom(popupRoomId, {
-        name: roomName.trim(),
-        width: Number(roomWidth),
-        length: Number(roomLength),
+      const updatedRoom = await updateRoom(roomModalId, {
+        name: roomModalName.trim(),
+        width: Number(roomModalWidth),
+        length: Number(roomModalLength),
       })
 
       const sortedRooms = await refreshRooms()
       setSelectedRoomId(updatedRoom.id)
-      setPopupRoomId(updatedRoom.id)
-      setActionMessage('Raum wurde aktualisiert.')
+      setRoomModalId(updatedRoom.id)
+      setRoomModalMessage('Raum wurde aktualisiert.')
       const updated = sortedRooms.find(room => room.id === updatedRoom.id)
       if (updated) {
-        setRoomName(updated.name)
-        setRoomWidth(String(updated.width))
-        setRoomLength(String(updated.length))
+        setRoomModalName(updated.name)
+        setRoomModalWidth(String(updated.width))
+        setRoomModalLength(String(updated.length))
       }
+      await refreshAllRoomObjects(sortedRooms)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
+      setRoomModalError(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
   }
 
   const handleDeleteRoom = async () => {
-    resetActionStates()
-    if (!popupRoomId) {
-      setActionError('Bitte wählen Sie einen Raum aus der Liste.')
+    resetRoomModalState()
+    if (!roomModalId) {
+      setRoomModalError('Bitte wählen Sie einen Raum aus der Liste.')
       return
     }
 
     setSaving(true)
 
     try {
-      await deleteRoom(popupRoomId)
+      await deleteRoom(roomModalId)
       const sortedRooms = await refreshRooms()
       const nextRoom = sortedRooms[0]
       if (nextRoom) {
         setSelectedRoomId(nextRoom.id)
-        setPopupRoomId(nextRoom.id)
-        setRoomName(nextRoom.name)
-        setRoomWidth(String(nextRoom.width))
-        setRoomLength(String(nextRoom.length))
+        setRoomModalId(nextRoom.id)
+        setRoomModalName(nextRoom.name)
+        setRoomModalWidth(String(nextRoom.width))
+        setRoomModalLength(String(nextRoom.length))
       } else {
         setSelectedRoomId('')
-        setPopupRoomId('')
-        setRoomName('')
-        setRoomWidth('')
-        setRoomLength('')
+        setRoomModalId('')
+        setRoomModalName('')
+        setRoomModalWidth('')
+        setRoomModalLength('')
       }
-      setActionMessage('Raum wurde gelöscht.')
+      setRoomModalMessage('Raum wurde gelöscht.')
+      await refreshAllRoomObjects(sortedRooms)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
+      setRoomModalError(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
   }
+
+  const handleCreateObjectType = async () => {
+    resetObjectTypeModalState()
+    const validationError = validateObjectTypeFields()
+    if (validationError) {
+      setObjectTypeModalError(validationError)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const createdType = await createObjectType(objectTypeModalName.trim())
+      const sortedTypes = await refreshObjectTypes()
+      setObjectTypeModalId(createdType.id)
+      setObjectTypeModalMessage('Möbeltyp wurde erstellt.')
+      const created = sortedTypes.find(type => type.id === createdType.id)
+      if (created) {
+        setObjectTypeModalName(created.name)
+      }
+    } catch (error) {
+      setObjectTypeModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUpdateObjectType = async () => {
+    resetObjectTypeModalState()
+    if (!objectTypeModalId) {
+      setObjectTypeModalError('Bitte wählen Sie einen Möbeltyp aus der Liste.')
+      return
+    }
+
+    const validationError = validateObjectTypeFields()
+    if (validationError) {
+      setObjectTypeModalError(validationError)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const updatedType = await updateObjectType(objectTypeModalId, objectTypeModalName.trim())
+      await refreshObjectTypes()
+      setObjectTypeModalId(updatedType.id)
+      setObjectTypeModalMessage('Möbeltyp wurde aktualisiert.')
+    } catch (error) {
+      setObjectTypeModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteObjectType = async () => {
+    resetObjectTypeModalState()
+    if (!objectTypeModalId) {
+      setObjectTypeModalError('Bitte wählen Sie einen Möbeltyp aus der Liste.')
+      return
+    }
+
+    const inUse = allRoomObjects.some(item => item.objectTypeId === objectTypeModalId)
+    if (inUse) {
+      setObjectTypeModalError('Dieser Möbeltyp kann nicht gelöscht werden, weil Möbel damit vorhanden sind.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      await deleteObjectType(objectTypeModalId)
+      const sortedTypes = await refreshObjectTypes()
+      const nextType = sortedTypes[0]
+      if (nextType) {
+        setObjectTypeModalId(nextType.id)
+        setObjectTypeModalName(nextType.name)
+      } else {
+        setObjectTypeModalId('')
+        setObjectTypeModalName('')
+      }
+      setObjectTypeModalMessage('Möbeltyp wurde gelöscht.')
+    } catch (error) {
+      setObjectTypeModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCreateRoomObject = async () => {
+    resetRoomObjectModalState()
+    const validationError = validateRoomObjectFields()
+    if (validationError) {
+      setObjectModalError(validationError)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const createdObject = await createRoomObject(objectModalRoomId, {
+        objectTypeId: objectModalTypeId,
+        name: objectModalName.trim(),
+        width: Number(objectModalWidth),
+        length: Number(objectModalLength),
+        positionX: Number(objectModalPositionX),
+        positionY: Number(objectModalPositionY),
+        rotation: 0,
+      })
+
+      const updatedObjects = await refreshRoomObjectsForRoom(objectModalRoomId)
+      setObjectModalId(createdObject.id)
+      setObjectModalMessage('Möbel wurde erstellt.')
+      const created = updatedObjects.find(obj => obj.id === createdObject.id)
+      if (created) {
+        setObjectModalName(created.name ?? '')
+        setObjectModalTypeId(created.objectTypeId)
+        setObjectModalRoomId(created.roomId)
+        setObjectModalWidth(String(created.width))
+        setObjectModalLength(String(created.length))
+        setObjectModalPositionX(String(created.positionX))
+        setObjectModalPositionY(String(created.positionY))
+      }
+      await refreshAllRoomObjects(rooms)
+    } catch (error) {
+      setObjectModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUpdateRoomObject = async () => {
+    resetRoomObjectModalState()
+    if (!objectModalId) {
+      setObjectModalError('Bitte wählen Sie ein Möbel aus der Liste.')
+      return
+    }
+
+    const validationError = validateRoomObjectFields()
+    if (validationError) {
+      setObjectModalError(validationError)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const updatedObject = await updateRoomObject(objectModalRoomId, objectModalId, {
+        objectTypeId: objectModalTypeId,
+        name: objectModalName.trim(),
+        width: Number(objectModalWidth),
+        length: Number(objectModalLength),
+        positionX: Number(objectModalPositionX),
+        positionY: Number(objectModalPositionY),
+        rotation: 0,
+      })
+
+      const updatedObjects = await refreshRoomObjectsForRoom(objectModalRoomId)
+      setObjectModalId(updatedObject.id)
+      setObjectModalMessage('Möbel wurde aktualisiert.')
+      const updated = updatedObjects.find(obj => obj.id === updatedObject.id)
+      if (updated) {
+        setObjectModalName(updated.name ?? '')
+        setObjectModalTypeId(updated.objectTypeId)
+        setObjectModalRoomId(updated.roomId)
+        setObjectModalWidth(String(updated.width))
+        setObjectModalLength(String(updated.length))
+        setObjectModalPositionX(String(updated.positionX))
+        setObjectModalPositionY(String(updated.positionY))
+      }
+      await refreshAllRoomObjects(rooms)
+    } catch (error) {
+      setObjectModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteRoomObject = async () => {
+    resetRoomObjectModalState()
+    if (!objectModalId) {
+      setObjectModalError('Bitte wählen Sie ein Möbel aus der Liste.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      await deleteRoomObject(objectModalRoomId, objectModalId)
+      const updatedObjects = await refreshRoomObjectsForRoom(objectModalRoomId)
+      const nextObject = updatedObjects[0]
+      if (nextObject) {
+        setObjectModalId(nextObject.id)
+        setObjectModalName(nextObject.name ?? '')
+        setObjectModalTypeId(nextObject.objectTypeId)
+        setObjectModalRoomId(nextObject.roomId)
+        setObjectModalWidth(String(nextObject.width))
+        setObjectModalLength(String(nextObject.length))
+        setObjectModalPositionX(String(nextObject.positionX))
+        setObjectModalPositionY(String(nextObject.positionY))
+      } else {
+        setObjectModalId('')
+        setObjectModalName('')
+        setObjectModalWidth('')
+        setObjectModalLength('')
+        setObjectModalPositionX('')
+        setObjectModalPositionY('')
+      }
+      setObjectModalMessage('Möbel wurde gelöscht.')
+      await refreshAllRoomObjects(rooms)
+    } catch (error) {
+      setObjectModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const typeDeleteDisabled = objectTypeModalId
+    ? allRoomObjects.some(item => item.objectTypeId === objectTypeModalId)
+    : false
+
+  const roomObjectItems = roomObjects.map(object => ({
+    id: object.id,
+    label: `${object.name || object.objectTypeName} (${object.objectTypeName})`,
+  }))
+
+  const roomItemList = rooms.map(room => ({ id: room.id, label: room.name }))
+  const objectTypeItemList = objectTypes.map(type => ({ id: type.id, label: type.name }))
 
   return (
     <>
@@ -227,11 +684,15 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
 
             {role === 'Mitarbeiter' ? (
               <div className="top-buttons">
-                <button type="button" className="top-button" onClick={() => setShowRoomModal(true)}>
+                <button type="button" className="top-button" onClick={openRoomModal}>
                   Raum
                 </button>
-                <button type="button" className="top-button">Möbeltyp</button>
-                <button type="button" className="top-button">Möbel</button>
+                <button type="button" className="top-button" onClick={openObjectTypeModal}>
+                  Möbeltyp
+                </button>
+                <button type="button" className="top-button" onClick={openRoomObjectModal}>
+                  Möbel
+                </button>
               </div>
             ) : null}
           </div>
@@ -249,70 +710,137 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         </section>
       </main>
 
-      {showRoomModal ? (
-        <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="room-modal-title">
-          <div className="room-modal">
-            <div className="room-modal-header">
-              <h2 id="room-modal-title">Raumverwaltung</h2>
-              <button type="button" className="modal-close" onClick={() => setShowRoomModal(false)}>
-                ×
-              </button>
-            </div>
-
-            <div className="room-modal-content">
-              <div className="room-list-panel">
-                <h3>Räume</h3>
-                <ul className="room-list" role="listbox" aria-label="Räume">
-                  {rooms.map(room => (
-                    <li
-                      key={room.id}
-                      className={room.id === popupRoomId ? 'room-list-item selected' : 'room-list-item'}
-                      onClick={() => handlePopupRoomSelect(room.id)}
-                      role="option"
-                      aria-selected={room.id === popupRoomId}
-                    >
-                      {room.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="room-form-panel">
-                <label className="field-label">
-                  Raumname
-                  <input value={roomName} onChange={event => setRoomName(event.target.value)} />
-                </label>
-
-                <div className="room-dimensions">
-                  <label className="field-label">
-                    Raumbreite
-                    <input value={roomWidth} onChange={event => setRoomWidth(event.target.value)} />
-                  </label>
-                  <label className="field-label">
-                    Raumlänge
-                    <input value={roomLength} onChange={event => setRoomLength(event.target.value)} />
-                  </label>
-                </div>
-
-                <div className="room-actions">
-                  <button type="button" className="action-button" onClick={handleCreateRoom} disabled={saving}>
-                    Neuen Raum erstellen
-                  </button>
-                  <button type="button" className="action-button" onClick={handleUpdateRoom} disabled={saving}>
-                    Update Raum
-                  </button>
-                  <button type="button" className="action-button danger" onClick={handleDeleteRoom} disabled={saving}>
-                    Raum löschen
-                  </button>
-                </div>
-
-                {actionMessage ? <p className="room-success">{actionMessage}</p> : null}
-                {actionError ? <p className="room-error">{actionError}</p> : null}
-              </div>
-            </div>
-          </div>
+      <CrudModal
+        title="Raumverwaltung"
+        open={openModal === 'rooms'}
+        onClose={() => setOpenModal(null)}
+        listTitle="Räume"
+        items={roomItemList}
+        selectedId={roomModalId}
+        onSelect={handleRoomSelectInModal}
+        actions={[
+          { label: 'Neuen Raum erstellen', onClick: handleCreateRoom, disabled: saving },
+          { label: 'Update Raum', onClick: handleUpdateRoom, disabled: saving },
+          { label: 'Raum löschen', onClick: handleDeleteRoom, variant: 'danger', disabled: saving },
+        ]}
+        status={{ message: roomModalMessage ?? undefined, error: roomModalError ?? undefined }}
+      >
+        <label className="field-label">
+          Raumname
+          <input value={roomModalName} onChange={event => setRoomModalName(event.target.value)} />
+        </label>
+        <div className="room-dimensions">
+          <label className="field-label">
+            Raumbreite
+            <input value={roomModalWidth} onChange={event => setRoomModalWidth(event.target.value)} />
+          </label>
+          <label className="field-label">
+            Raumlänge
+            <input value={roomModalLength} onChange={event => setRoomModalLength(event.target.value)} />
+          </label>
         </div>
-      ) : null}
+      </CrudModal>
+
+      <CrudModal
+        title="Möbeltyp Verwaltung"
+        open={openModal === 'objectTypes'}
+        onClose={() => setOpenModal(null)}
+        listTitle="Möbeltypen"
+        items={objectTypeItemList}
+        selectedId={objectTypeModalId}
+        onSelect={handleObjectTypeSelectInModal}
+        actions={[
+          { label: 'Neuen Möbeltyp erstellen', onClick: handleCreateObjectType, disabled: saving },
+          { label: 'Update Möbeltyp', onClick: handleUpdateObjectType, disabled: saving },
+          { label: 'Möbeltyp löschen', onClick: handleDeleteObjectType, variant: 'danger', disabled: saving || typeDeleteDisabled },
+        ]}
+        status={{ message: objectTypeModalMessage ?? undefined, error: objectTypeModalError ?? undefined }}
+      >
+        <label className="field-label">
+          Name
+          <input value={objectTypeModalName} onChange={event => setObjectTypeModalName(event.target.value)} />
+        </label>
+        {typeDeleteDisabled ? (
+          <p className="room-error">Dieser Möbeltyp ist noch in Gebrauch und kann nicht gelöscht werden.</p>
+        ) : null}
+      </CrudModal>
+
+      <CrudModal
+        title="Möbelverwaltung"
+        open={openModal === 'roomObjects'}
+        onClose={() => setOpenModal(null)}
+        listTitle="Möbel"
+        items={roomObjectItems}
+        selectedId={objectModalId}
+        onSelect={handleRoomObjectSelectInModal}
+        actions={[
+          { label: 'Neues Möbel erstellen', onClick: handleCreateRoomObject, disabled: saving },
+          { label: 'Update Möbel', onClick: handleUpdateRoomObject, disabled: saving },
+          { label: 'Möbel löschen', onClick: handleDeleteRoomObject, variant: 'danger', disabled: saving },
+        ]}
+        status={{ message: objectModalMessage ?? undefined, error: objectModalError ?? undefined }}
+      >
+        <label className="field-label">
+          Name
+          <input value={objectModalName} onChange={event => setObjectModalName(event.target.value)} />
+        </label>
+
+        <label className="field-label">
+          Möbeltyp
+          <select value={objectModalTypeId} onChange={event => setObjectModalTypeId(event.target.value)}>
+            {loadingObjectTypes ? (
+              <option>Lade Möbeltypen...</option>
+            ) : objectTypes.length === 0 ? (
+              <option>Keine Möbeltypen verfügbar</option>
+            ) : (
+              objectTypes.map(type => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <label className="field-label">
+          Raum
+          <select value={objectModalRoomId} onChange={event => setObjectModalRoomId(event.target.value)}>
+            {loadingRooms ? (
+              <option>Lade Räume...</option>
+            ) : rooms.length === 0 ? (
+              <option>Keine Räume verfügbar</option>
+            ) : (
+              rooms.map(room => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <div className="room-dimensions">
+          <label className="field-label">
+            Objektbreite
+            <input value={objectModalWidth} onChange={event => setObjectModalWidth(event.target.value)} />
+          </label>
+          <label className="field-label">
+            Objektlänge
+            <input value={objectModalLength} onChange={event => setObjectModalLength(event.target.value)} />
+          </label>
+        </div>
+
+        <div className="room-dimensions">
+          <label className="field-label">
+            Position X
+            <input value={objectModalPositionX} onChange={event => setObjectModalPositionX(event.target.value)} />
+          </label>
+          <label className="field-label">
+            Position Y
+            <input value={objectModalPositionY} onChange={event => setObjectModalPositionY(event.target.value)} />
+          </label>
+        </div>
+      </CrudModal>
     </>
   )
 }
