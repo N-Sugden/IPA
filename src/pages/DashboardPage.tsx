@@ -650,6 +650,14 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
   const roomItemList = rooms.map(room => ({ id: room.id, label: room.name }))
   const objectTypeItemList = objectTypes.map(type => ({ id: type.id, label: type.name }))
 
+  const selectedRoom = rooms.find(room => room.id === selectedRoomId)
+  const roomPreviewStyle = selectedRoom
+    ? {
+        width: `${selectedRoom.width}px`,
+        height: `${selectedRoom.length}px`,
+      }
+    : undefined
+
   return (
     <>
       <header className="app-header">
@@ -701,11 +709,19 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         </section>
 
         <section className="dashboard-main">
-          <div className="dashboard-card">
-            <h1>Raumplaner Frontend</h1>
-            <div className="dashboard-note">
-              <strong>Hinweis:</strong> Diese Login-Maske ist nur für die Entwicklung. Microsoft Login wird später integriert.
-            </div>
+          <div className="room-display-panel">
+            {selectedRoom ? (
+              <div className="room-preview">
+                <div className="room-preview__shape" style={roomPreviewStyle}>
+                </div>
+                <div className="room-info">
+                  <p>Breite: {selectedRoom.width} cm</p>
+                  <p>Länge: {selectedRoom.length} cm</p>
+                </div>
+              </div>
+            ) : (
+              <p>Bitte wählen Sie einen Raum aus, um ihn als Fläche anzuzeigen.</p>
+            )}
           </div>
         </section>
       </main>

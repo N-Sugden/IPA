@@ -378,6 +378,39 @@ body {
 
 .dashboard-main {
   display: grid;
+  gap: 24px;
+}
+
+.room-display-panel {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.room-preview {
+  display: grid;
+  gap: 20px;
+  align-items: center;
+}
+
+.room-preview__shape {
+  display: grid;
+  place-items: center;
+  border: 2px solid #000000;
+  overflow: auto;
+}
+
+.room-info {
+  display: grid;
+  gap: 10px;
+  color: #334155;
+  text-align: center;
+}
+
+.room-info p {
+  margin: 0;
 }
 
 .dashboard-error {
