@@ -392,14 +392,46 @@ body {
 .room-preview {
   display: grid;
   gap: 20px;
-  align-items: center;
+  align-items: start;
+}
+
+.room-preview-region {
+  display: flex;
 }
 
 .room-preview__shape {
+  position: relative;
   display: grid;
   place-items: center;
   border: 2px solid #000000;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.room-object {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: 2px solid #000000;
+}
+
+.room-object.selected {
+  background: #6ec4e8;
+}
+
+.room-object span {
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.room-details {
+  display: grid;
+  gap: 16px;
+}
+
+.selected-object-details {
+  padding: 18px;
+  color: #009de0;
 }
 
 .room-info {

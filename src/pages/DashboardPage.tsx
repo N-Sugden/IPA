@@ -68,6 +68,7 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
   const [objectModalMessage, setObjectModalMessage] = useState<string | null>(null)
   const [objectModalError, setObjectModalError] = useState<string | null>(null)
 
+  const [selectedRoomObjectId, setSelectedRoomObjectId] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
   const refreshRooms = async (): Promise<Room[]> => {
@@ -159,6 +160,13 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
       refreshRoomObjectsForRoom(objectModalRoomId)
     }
   }, [openModal, objectModalRoomId])
+
+  useEffect(() => {
+    if (selectedRoomId) {
+      refreshRoomObjectsForRoom(selectedRoomId)
+      setSelectedRoomObjectId('')
+    }
+  }, [selectedRoomId])
 
   const handleRoomSelect = (roomId: string) => {
     setSelectedRoomId(roomId)
@@ -518,16 +526,36 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
       return
     }
 
+    const selectedRoomForObject = rooms.find(room => room.id === objectModalRoomId)
+    if (!selectedRoomForObject) {
+      setObjectModalError('Der ausgewählte Raum wurde nicht gefunden.')
+      return
+    }
+
+    const objectWidth = Number(objectModalWidth)
+    const objectLength = Number(objectModalLength)
+    const objectX = Number(objectModalPositionX)
+    const objectY = Number(objectModalPositionY)
+
+    if (objectWidth > selectedRoomForObject.width || objectLength > selectedRoomForObject.length) {
+      setObjectModalError('Das Möbelstück darf nicht größer als der Raum sein.')
+      return
+    }
+    if (objectX + objectWidth > selectedRoomForObject.width || objectY + objectLength > selectedRoomForObject.length) {
+      setObjectModalError('Das Möbelstück darf den Raum nicht verlassen.')
+      return
+    }
+
     setSaving(true)
 
     try {
       const createdObject = await createRoomObject(objectModalRoomId, {
         objectTypeId: objectModalTypeId,
         name: objectModalName.trim(),
-        width: Number(objectModalWidth),
-        length: Number(objectModalLength),
-        positionX: Number(objectModalPositionX),
-        positionY: Number(objectModalPositionY),
+        width: objectWidth,
+        length: objectLength,
+        positionX: objectX,
+        positionY: objectY,
         rotation: 0,
       })
 
@@ -565,16 +593,36 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
       return
     }
 
+    const selectedRoomForObject = rooms.find(room => room.id === objectModalRoomId)
+    if (!selectedRoomForObject) {
+      setObjectModalError('Der ausgewählte Raum wurde nicht gefunden.')
+      return
+    }
+
+    const objectWidth = Number(objectModalWidth)
+    const objectLength = Number(objectModalLength)
+    const objectX = Number(objectModalPositionX)
+    const objectY = Number(objectModalPositionY)
+
+    if (objectWidth > selectedRoomForObject.width || objectLength > selectedRoomForObject.length) {
+      setObjectModalError('Das Möbelstück darf nicht größer als der Raum sein.')
+      return
+    }
+    if (objectX + objectWidth > selectedRoomForObject.width || objectY + objectLength > selectedRoomForObject.length) {
+      setObjectModalError('Das Möbelstück darf den Raum nicht verlassen.')
+      return
+    }
+
     setSaving(true)
 
     try {
       const updatedObject = await updateRoomObject(objectModalRoomId, objectModalId, {
         objectTypeId: objectModalTypeId,
         name: objectModalName.trim(),
-        width: Number(objectModalWidth),
-        length: Number(objectModalLength),
-        positionX: Number(objectModalPositionX),
-        positionY: Number(objectModalPositionY),
+        width: objectWidth,
+        length: objectLength,
+        positionX: objectX,
+        positionY: objectY,
         rotation: 0,
       })
 
@@ -657,6 +705,7 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         height: `${selectedRoom.length}px`,
       }
     : undefined
+  const selectedRoomObject = roomObjects.find(object => object.id === selectedRoomObjectId)
 
   return (
     <>
@@ -711,14 +760,52 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         <section className="dashboard-main">
           <div className="room-display-panel">
             {selectedRoom ? (
-              <div className="room-preview">
-                <div className="room-preview__shape" style={roomPreviewStyle}>
+              <>
+                <div className="room-preview-region">
+                  <div className="room-preview__shape" style={roomPreviewStyle}>
+                    {roomObjects
+                      .filter(object => object.roomId === selectedRoom.id)
+                      .map(object => {
+                        const objectStyle = {
+                          width: `${object.width}px`,
+                          height: `${object.length}px`,
+                          left: `${object.positionX}px`,
+                          bottom: `${object.positionY}px`,
+                        }
+
+                        return (
+                          <div
+                            key={object.id}
+                            className={`room-object ${selectedRoomObjectId === object.id ? 'selected' : ''}`}
+                            style={objectStyle}
+                            onClick={() => setSelectedRoomObjectId(object.id)}
+                          >
+                          </div>
+                        )
+                      })}
+                  </div>
+                    {selectedRoomObject ? (
+                    <div className="selected-object-details">
+                      <p>
+                        {selectedRoomObject.name || selectedRoomObject.objectTypeName}
+                      </p>
+                      <p>
+                        {selectedRoomObject.objectTypeName}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="selected-object-details">
+                      <p>Bitte ein Objekt im Raum auswählen, um Details anzuzeigen.</p>
+                    </div>
+                  )}
                 </div>
-                <div className="room-info">
-                  <p>Breite: {selectedRoom.width} cm</p>
-                  <p>Länge: {selectedRoom.length} cm</p>
+                <div className="room-details">
+                  <div className="room-info">
+                    <p>Breite: {selectedRoom.width} cm</p>
+                    <p>Länge: {selectedRoom.length} cm</p>
+                  </div>
                 </div>
-              </div>
+              </>
             ) : (
               <p>Bitte wählen Sie einen Raum aus, um ihn als Fläche anzuzeigen.</p>
             )}
