@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Room, ObjectType, RoomObject, UserRole } from '../types'
 import RoleBadge from '../components/RoleBadge'
 import CrudModal from '../components/CrudModal'
@@ -69,6 +69,15 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
   const [objectModalError, setObjectModalError] = useState<string | null>(null)
 
   const [selectedRoomObjectId, setSelectedRoomObjectId] = useState<string>('')
+  const [objectPreviewPositions, setObjectPreviewPositions] = useState<Record<string, { positionX: number; positionY: number }>>({})
+  const [dragState, setDragState] = useState<{
+    objectId: string
+    offsetX: number
+    offsetY: number
+    objectWidth: number
+    objectHeight: number
+  } | null>(null)
+  const roomPreviewRef = useRef<HTMLDivElement | null>(null)
   const [saving, setSaving] = useState(false)
 
   const refreshRooms = async (): Promise<Room[]> => {
@@ -170,6 +179,72 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
 
   const handleRoomSelect = (roomId: string) => {
     setSelectedRoomId(roomId)
+  }
+
+  const getObjectPreviewPosition = (object: RoomObject) => {
+    return objectPreviewPositions[object.id] ?? {
+      positionX: object.positionX,
+      positionY: object.positionY,
+    }
+  }
+
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+  const startDragObject = (object: RoomObject, event: React.PointerEvent<HTMLDivElement>) => {
+    const preview = roomPreviewRef.current
+    if (!preview) {
+      return
+    }
+
+    event.preventDefault()
+    setSelectedRoomObjectId(object.id)
+
+    const rect = preview.getBoundingClientRect()
+    const previewPos = getObjectPreviewPosition(object)
+    const objectWidth = object.width
+    const objectHeight = object.length
+    const pointerX = event.clientX - rect.left
+    const pointerY = event.clientY - rect.top
+    const currentLeft = previewPos.positionX
+    const currentTop = rect.height - previewPos.positionY - objectHeight
+    const offsetX = pointerX - currentLeft
+    const offsetY = pointerY - currentTop
+
+    setDragState({
+      objectId: object.id,
+      offsetX,
+      offsetY,
+      objectWidth,
+      objectHeight,
+    })
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const moveDraggedObject = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState || !roomPreviewRef.current) {
+      return
+    }
+
+    const preview = roomPreviewRef.current
+    const rect = preview.getBoundingClientRect()
+    const pointerX = event.clientX - rect.left
+    const pointerY = event.clientY - rect.top
+    const newLeft = clamp(pointerX - dragState.offsetX, 0, rect.width - dragState.objectWidth)
+    const newTop = clamp(pointerY - dragState.offsetY, 0, rect.height - dragState.objectHeight)
+    const newBottom = (rect.height - dragState.objectHeight) - newTop
+
+    setObjectPreviewPositions(prev => ({
+      ...prev,
+      [dragState.objectId]: {
+        positionX: newLeft,
+        positionY: newBottom,
+      },
+    }))
+  }
+
+  const stopDragging = () => {
+    setDragState(null)
   }
 
   const openRoomModal = () => {
@@ -760,17 +835,25 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         <section className="dashboard-main">
           <div className="room-display-panel">
             {selectedRoom ? (
-              <>
+              <div className="room-preview-grid">
                 <div className="room-preview-region">
-                  <div className="room-preview__shape" style={roomPreviewStyle}>
+                  <div
+                    ref={roomPreviewRef}
+                    className="room-preview__shape"
+                    style={roomPreviewStyle}
+                    onPointerMove={moveDraggedObject}
+                    onPointerUp={stopDragging}
+                    onPointerCancel={stopDragging}
+                  >
                     {roomObjects
                       .filter(object => object.roomId === selectedRoom.id)
                       .map(object => {
+                        const previewPos = getObjectPreviewPosition(object)
                         const objectStyle = {
                           width: `${object.width}px`,
                           height: `${object.length}px`,
-                          left: `${object.positionX}px`,
-                          bottom: `${object.positionY}px`,
+                          left: `${previewPos.positionX}px`,
+                          bottom: `${previewPos.positionY}px`,
                         }
 
                         return (
@@ -778,13 +861,17 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
                             key={object.id}
                             className={`room-object ${selectedRoomObjectId === object.id ? 'selected' : ''}`}
                             style={objectStyle}
-                            onClick={() => setSelectedRoomObjectId(object.id)}
+                            onPointerDown={event => startDragObject(object, event)}
+                            onPointerMove={moveDraggedObject}
+                            onPointerUp={stopDragging}
+                            onPointerCancel={stopDragging}
                           >
                           </div>
                         )
                       })}
                   </div>
-                    {selectedRoomObject ? (
+                </div>
+                  {selectedRoomObject ? (
                     <div className="selected-object-details">
                       <p>
                         {selectedRoomObject.name || selectedRoomObject.objectTypeName}
@@ -798,14 +885,11 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
                       <p>Bitte ein Objekt im Raum auswählen, um Details anzuzeigen.</p>
                     </div>
                   )}
-                </div>
-                <div className="room-details">
-                  <div className="room-info">
+                <div className="room-info">
                     <p>Breite: {selectedRoom.width} cm</p>
                     <p>Länge: {selectedRoom.length} cm</p>
                   </div>
-                </div>
-              </>
+              </div>
             ) : (
               <p>Bitte wählen Sie einen Raum aus, um ihn als Fläche anzuzeigen.</p>
             )}
