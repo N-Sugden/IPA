@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Room, ObjectType, RoomObject, UserRole } from '../types'
 import RoleBadge from '../components/RoleBadge'
 import CrudModal from '../components/CrudModal'
+import RoomPreview from '../components/RoomPreview'
 import {
   createRoom,
   deleteRoom,
@@ -944,71 +945,21 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
         <section className="dashboard-main">
           <div className="room-display-panel">
             {selectedRoom ? (
-              <div className="room-preview-grid">
-                <div className="room-preview-region">
-                  <div
-                    ref={roomPreviewRef}
-                    className="room-preview__shape"
-                    style={roomPreviewStyle}
-                    onPointerMove={moveDraggedObject}
-                    onPointerUp={stopDragging}
-                    onPointerCancel={stopDragging}
-                  >
-                    {roomObjects
-                      .filter(object => object.roomId === selectedRoom.id)
-                      .map(object => {
-                        const previewPos = getObjectPreviewPosition(object)
-                        const objectStyle = {
-                          width: `${object.width}px`,
-                          height: `${object.length}px`,
-                          left: `${previewPos.positionX}px`,
-                          bottom: `${previewPos.positionY}px`,
-                        }
-
-                        return (
-                          <div
-                            key={object.id}
-                            className={`room-object ${selectedRoomObjectId === object.id ? 'selected' : ''}`}
-                            style={objectStyle}
-                            onPointerDown={event => startDragObject(object, event)}
-                            onPointerMove={moveDraggedObject}
-                            onPointerUp={stopDragging}
-                            onPointerCancel={stopDragging}
-                          >
-                          </div>
-                        )
-                      })}
-                  </div>
-                </div>
-                  {selectedRoomObject ? (
-                    <div className="selected-object-details">
-                      <p>
-                        {selectedRoomObject.name || selectedRoomObject.objectTypeName}
-                      </p>
-                      <p>
-                        {selectedRoomObject.objectTypeName}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="selected-object-details">
-                      <p>Bitte ein Objekt im Raum auswählen, um Details anzuzeigen.</p>
-                    </div>
-                  )}
-                <div className="room-info">
-                    <p>Breite: {selectedRoom.width} cm</p>
-                    <p>Länge: {selectedRoom.length} cm</p>
-                  </div>
-                  <div className="save-floorplan-row">
-                    <button
-                      type="button"
-                      className="top-button save-floorplan-button"
-                      onClick={saveFloorplan}
-                      disabled={saving || !hasPreviewChanges}
-                    >
-                      Raumplan speichern
-                    </button>
-                  </div>
-                </div>
+              <RoomPreview
+                ref={roomPreviewRef}
+                selectedRoom={selectedRoom}
+                roomObjects={roomObjects}
+                selectedRoomObjectId={selectedRoomObjectId}
+                selectedRoomObject={selectedRoomObject}
+                roomPreviewStyle={roomPreviewStyle}
+                getObjectPreviewPosition={getObjectPreviewPosition}
+                onStartDragObject={startDragObject}
+                onMoveDraggedObject={moveDraggedObject}
+                onStopDragging={stopDragging}
+                saveFloorplan={saveFloorplan}
+                hasPreviewChanges={hasPreviewChanges}
+                saving={saving}
+              />
             ) : (
               <p>Bitte wählen Sie einen Raum aus, um ihn als Fläche anzuzeigen.</p>
             )}
