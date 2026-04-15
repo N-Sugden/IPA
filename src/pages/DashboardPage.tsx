@@ -190,6 +190,56 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
 
   const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
+  const buildBounds = (positionX: number, positionY: number, width: number, length: number) => ({
+    left: positionX,
+    right: positionX + width,
+    bottom: positionY,
+    top: positionY + length,
+  })
+
+  const rectanglesOverlap = (
+    a: { left: number; right: number; bottom: number; top: number },
+    b: { left: number; right: number; bottom: number; top: number }
+  ) => a.left < b.right && a.right > b.left && a.bottom < b.top && a.top > b.bottom
+
+  const getRoomObjectPreviewBounds = (object: RoomObject) => {
+    const previewPos = getObjectPreviewPosition(object)
+    return buildBounds(previewPos.positionX, previewPos.positionY, object.width, object.length)
+  }
+
+  const hasCollisionWithOtherObjects = (
+    roomId: string,
+    positionX: number,
+    positionY: number,
+    width: number,
+    length: number,
+    excludeObjectId?: string,
+  ) => {
+    const bounds = buildBounds(positionX, positionY, width, length)
+    return roomObjects
+      .filter(item => item.roomId === roomId && item.id !== excludeObjectId)
+      .some(item => rectanglesOverlap(bounds, getRoomObjectPreviewBounds(item)))
+  }
+
+  const isPositionWithinRoom = (
+    roomId: string,
+    positionX: number,
+    positionY: number,
+    width: number,
+    length: number,
+  ) => {
+    const room = rooms.find(item => item.id === roomId)
+    if (!room) {
+      return false
+    }
+    return (
+      positionX >= 0 &&
+      positionY >= 0 &&
+      positionX + width <= room.width &&
+      positionY + length <= room.length
+    )
+  }
+
   const startDragObject = (object: RoomObject, event: React.PointerEvent<HTMLDivElement>) => {
     const preview = roomPreviewRef.current
     if (!preview) {
@@ -222,7 +272,7 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
   }
 
   const moveDraggedObject = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState || !roomPreviewRef.current) {
+    if (!dragState || !roomPreviewRef.current || !selectedRoomId) {
       return
     }
 
@@ -232,7 +282,21 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
     const pointerY = event.clientY - rect.top
     const newLeft = clamp(pointerX - dragState.offsetX, 0, rect.width - dragState.objectWidth)
     const newTop = clamp(pointerY - dragState.offsetY, 0, rect.height - dragState.objectHeight)
-    const newBottom = (rect.height - dragState.objectHeight) - newTop
+    const newBottom = rect.height - dragState.objectHeight - newTop
+
+    if (
+      !isPositionWithinRoom(selectedRoomId, newLeft, newBottom, dragState.objectWidth, dragState.objectHeight) ||
+      hasCollisionWithOtherObjects(
+        selectedRoomId,
+        newLeft,
+        newBottom,
+        dragState.objectWidth,
+        dragState.objectHeight,
+        dragState.objectId,
+      )
+    ) {
+      return
+    }
 
     setObjectPreviewPositions(prev => ({
       ...prev,
@@ -657,6 +721,10 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
       setObjectModalError('Das Möbelstück darf den Raum nicht verlassen.')
       return
     }
+    if (hasCollisionWithOtherObjects(objectModalRoomId, objectX, objectY, objectWidth, objectLength)) {
+      setObjectModalError('Das Möbelstück darf sich nicht mit einem anderen Möbelstück überschneiden.')
+      return
+    }
 
     setSaving(true)
 
@@ -722,6 +790,10 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
     }
     if (objectX + objectWidth > selectedRoomForObject.width || objectY + objectLength > selectedRoomForObject.length) {
       setObjectModalError('Das Möbelstück darf den Raum nicht verlassen.')
+      return
+    }
+    if (hasCollisionWithOtherObjects(objectModalRoomId, objectX, objectY, objectWidth, objectLength, objectModalId)) {
+      setObjectModalError('Das Möbelstück darf sich nicht mit einem anderen Möbelstück überschneiden.')
       return
     }
 
