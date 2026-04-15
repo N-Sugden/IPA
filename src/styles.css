@@ -429,6 +429,12 @@ body {
   background: #6ec4e8;
 }
 
+.save-floorplan-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 .room-object span {
   pointer-events: none;
   white-space: nowrap;

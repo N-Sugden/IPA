@@ -247,6 +247,43 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
     setDragState(null)
   }
 
+  const hasPreviewChanges = Object.entries(objectPreviewPositions).some(([objectId, previewPos]) => {
+    const object = roomObjects.find(item => item.id === objectId)
+    return object ? object.positionX !== previewPos.positionX || object.positionY !== previewPos.positionY : false
+  })
+
+  const saveFloorplan = async () => {
+    if (!selectedRoom || saving || !hasPreviewChanges) {
+      return
+    }
+
+    setSaving(true)
+    try {
+      const updates = roomObjects
+        .filter(object => object.roomId === selectedRoom.id)
+        .map(object => {
+          const previewPos = getObjectPreviewPosition(object)
+          return updateRoomObject(object.roomId, object.id, {
+            objectTypeId: object.objectTypeId,
+            name: object.name ?? '',
+            width: object.width,
+            length: object.length,
+            positionX: previewPos.positionX,
+            positionY: previewPos.positionY,
+            rotation: object.rotation,
+          })
+        })
+
+      await Promise.all(updates)
+      await refreshRoomObjectsForRoom(selectedRoom.id)
+      setObjectPreviewPositions({})
+    } catch (error) {
+      setRoomObjectError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const openRoomModal = () => {
     setRoomModalMessage(null)
     setRoomModalError(null)
@@ -889,7 +926,17 @@ const DashboardPage = ({ role, onLogout }: DashboardPageProps) => {
                     <p>Breite: {selectedRoom.width} cm</p>
                     <p>Länge: {selectedRoom.length} cm</p>
                   </div>
-              </div>
+                  <div className="save-floorplan-row">
+                    <button
+                      type="button"
+                      className="top-button save-floorplan-button"
+                      onClick={saveFloorplan}
+                      disabled={saving || !hasPreviewChanges}
+                    >
+                      Raumplan speichern
+                    </button>
+                  </div>
+                </div>
             ) : (
               <p>Bitte wählen Sie einen Raum aus, um ihn als Fläche anzuzeigen.</p>
             )}
